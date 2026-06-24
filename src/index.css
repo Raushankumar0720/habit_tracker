@@ -1,0 +1,87 @@
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Playfair+Display:ital,wght@0,700;1,600;1,700&display=swap');
+
+@import "tailwindcss";
+
+:root {
+  font-family: 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  color-scheme: light;
+}
+
+body {
+  background-color: #f6f8fb; /* bg-zinc-100/30 or slate-50/50 */
+  color: #1e293b; /* text-slate-800 */
+  margin: 0;
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Custom fonts styling */
+.font-script {
+  font-family: 'Playfair Display', Georgia, Cambria, "Times New Roman", Times, serif;
+  font-style: italic;
+}
+
+/* Custom scrollbars for grids */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: #f1f5f9;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* Custom styling for the weekly sections in the grid matrix */
+.week-1-theme {
+  --week-bg: #b4d2f9; /* Blue */
+  --week-text: #1d4ed8;
+  --week-border: #93c5fd;
+  --week-check-bg: #2563eb;
+}
+
+.week-2-theme {
+  --week-bg: #fbcfe8; /* Pink */
+  --week-text: #be185d;
+  --week-border: #f9a8d4;
+  --week-check-bg: #db2777;
+}
+
+.week-3-theme {
+  --week-bg: #ccfbf1; /* Teal */
+  --week-text: #0f766e;
+  --week-border: #99f6e4;
+  --week-check-bg: #0d9488;
+}
+
+.week-4-theme {
+  --week-bg: #fef08a; /* Gold */
+  --week-text: #a16207;
+  --week-border: #fde047;
+  --week-check-bg: #ca8a04;
+}
+
+.week-5-theme {
+  --week-bg: #cbd5e1; /* Slate/Blue-grey */
+  --week-text: #334155;
+  --week-border: #cbd5e1;
+  --week-check-bg: #475569;
+}
+
+/* Grid checkbox checked pop animation */
+@keyframes cellPop {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.15); }
+  100% { transform: scale(1); }
+}
+
+.cell-pop {
+  animation: cellPop 0.2s ease-out;
+}
