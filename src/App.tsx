@@ -10,8 +10,8 @@ import { HabitFormModal } from './components/HabitFormModal';
 import { AuthModal } from './components/AuthModal';
 import { calculateStreak, calculateMaxStreak, isHabitCompletedOnDate, calculateWeekendStats } from './utils/analytics';
 import { supabase, isSupabaseConfigured } from './utils/supabaseClient';
-import type { Habit, HabitCategory } from './types';
-import { ChevronDown, Lock, Unlock, Settings, Eye, Sliders, BookOpen, Snowflake, Trophy, Flame, Cloud, CloudOff, CloudLightning, User } from 'lucide-react';
+import type { Habit } from './types';
+import { ChevronDown, Lock, Unlock, Settings, Eye, Sliders, BookOpen, Snowflake, Trophy, Flame, Cloud, CloudOff, CloudLightning, User, Skull } from 'lucide-react';
 
 const MONTH_NAMES = [
   'January', 'February', 'March', 'April', 'May', 'June',
@@ -24,9 +24,6 @@ function DashboardContent() {
   const {
     activeHabits,
     history,
-    addHabit,
-    deleteHabit,
-    updateHabitName,
     updateHabitGoal,
     currentMonth,
     setCurrentMonth,
@@ -42,8 +39,6 @@ function DashboardContent() {
     setSmartSort,
     zenMode,
     setZenMode,
-    hoveredRowIndex,
-    setHoveredRowIndex,
     
     // Supabase States
     user,
@@ -56,42 +51,9 @@ function DashboardContent() {
   const [isAuthOpen, setIsAuthOpen] = useState(false);
   const [habitToEdit, setHabitToEdit] = useState<Habit | null>(null);
 
-  const activeCount = activeHabits.length;
-
   const totalDays = useMemo(() => {
     return new Date(currentYear, currentMonth + 1, 0).getDate();
   }, [currentYear, currentMonth]);
-
-  // Handle inline habit name modifications
-  const handleNameChange = (index: number, newName: string) => {
-    const habit = activeHabits[index];
-    if (habit) {
-      updateHabitName(habit.id, newName);
-    } else if (newName.trim()) {
-      const categories: HabitCategory[] = ['health', 'work', 'mind', 'finance'];
-      const cat = categories[index % categories.length];
-      const icons = ['Dumbbell', 'Code', 'Brain', 'Wallet'];
-      const icon = icons[index % icons.length];
-      
-      addHabit(
-        newName,
-        `My habit routing number ${index + 1}`,
-        cat,
-        'daily',
-        'positive',
-        'binary',
-        icon,
-        80
-      );
-    }
-  };
-
-  const handleNameBlur = (index: number) => {
-    const habit = activeHabits[index];
-    if (habit && !habit.name.trim()) {
-      deleteHabit(habit.id);
-    }
-  };
 
   // Calculate monthly stats for the active month
   const { totalMonthCompletions, totalMonthPossible, monthlyCompletionRate } = useMemo(() => {
@@ -166,6 +128,120 @@ function DashboardContent() {
   const weekendStats = useMemo(() => {
     return calculateWeekendStats(history, activeHabits);
   }, [history, activeHabits]);
+
+  const coachInsights = useMemo(() => {
+    if (activeHabits.length === 0) {
+      return {
+        appreciation: "Welcome to ROBUST! Add your first habit in the grid to begin your journey.",
+        improvement: "No habits tracked yet. Start small with 1 or 2 daily routines.",
+        blunder: "No alerts. Keep your dashboard clean and focused!"
+      };
+    }
+
+    let bestHabit: Habit | null = null;
+    let bestStreak = 0;
+    let highestPercent = -1;
+
+    let weakHabit: Habit | null = null;
+    let lowestPercent = 101;
+
+    let recentBlunder: string | null = null;
+
+    habitsMonthStats.forEach(stat => {
+      const currentStreak = calculateStreak(history, stat.habit);
+      
+      if (currentStreak > bestStreak) {
+        bestStreak = currentStreak;
+        bestHabit = stat.habit;
+      } else if (bestStreak === 0 && stat.percent > highestPercent) {
+        highestPercent = stat.percent;
+        bestHabit = stat.habit;
+      }
+
+      if (stat.possibleDays >= 3) {
+        if (stat.percent < lowestPercent) {
+          lowestPercent = stat.percent;
+          weakHabit = stat.habit;
+        }
+      }
+    });
+
+    if (!bestHabit && activeHabits.length > 0) {
+      bestHabit = activeHabits[0];
+      highestPercent = habitsMonthStats[0]?.percent || 0;
+    }
+
+    const today = new Date();
+    const yesterday = new Date(today);
+    yesterday.setDate(today.getDate() - 1);
+    
+    const formatDateStr = (d: Date) => {
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      const dd = String(d.getDate()).padStart(2, '0');
+      return `${y}-${m}-${dd}`;
+    };
+    
+    const todayStr = formatDateStr(today);
+    const yesterdayStr = formatDateStr(yesterday);
+
+    const negativeHabits = activeHabits.filter(h => h.type === 'negative');
+    let violatedHabitName: string | null = null;
+    for (const h of negativeHabits) {
+      const valToday = history[todayStr]?.[h.id];
+      const valYesterday = history[yesterdayStr]?.[h.id];
+      if (valToday === true || (typeof valToday === 'number' && valToday > 0)) {
+        violatedHabitName = h.name;
+        break;
+      }
+      if (valYesterday === true || (typeof valYesterday === 'number' && valYesterday > 0)) {
+        violatedHabitName = h.name;
+        break;
+      }
+    }
+
+    if (violatedHabitName) {
+      recentBlunder = `Slip-up logged in "${violatedHabitName}" recently. Forgive yourself, reset your mindset, and win today!`;
+    } else {
+      if (streakFreezes === 0) {
+        recentBlunder = "You have 0 Streak Freezes remaining! If you miss a day, your streak will break. Earn 150 XP to buy one now.";
+      } else {
+        let missedHabitName: string | null = null;
+        for (const stat of habitsMonthStats) {
+          if (stat.habit.type === 'positive' && stat.habit.createdAt <= yesterdayStr) {
+            const valYesterday = history[yesterdayStr]?.[stat.habit.id];
+            const completedYesterday = isHabitCompletedOnDate(stat.habit, valYesterday);
+            const currentStreak = calculateStreak(history, stat.habit);
+            if (!completedYesterday && valYesterday !== 'frozen' && currentStreak === 0) {
+              missedHabitName = stat.habit.name;
+              break;
+            }
+          }
+        }
+        if (missedHabitName) {
+          recentBlunder = `Streak reset on "${missedHabitName}" due to a missed day. Remember, consistency is a long game. Try again!`;
+        } else {
+          recentBlunder = "No critical blunders detected! Your streaks are secure and protected.";
+        }
+      }
+    }
+
+    const appreciation = bestHabit
+      ? bestStreak > 0
+        ? `Outstanding! You are on a ${bestStreak}-day streak for "${bestHabit.name}". You are building incredible momentum!`
+        : `Great work! Your completion rate for "${bestHabit.name}" is at ${highestPercent}%. Keep showing up!`
+      : "Keep taking action! Every checkmark builds your level and XP.";
+
+    const improvement = weakHabit && lowestPercent < 60
+      ? `Focus Area: "${weakHabit.name}" is currently at ${lowestPercent}% completion. Try setting a specific daily trigger or doing it first thing in the morning.`
+      : "Excellent balance! All your active habits are performing at a high level of consistency.";
+
+    return {
+      appreciation,
+      improvement,
+      blunder: recentBlunder
+    };
+  }, [activeHabits, history, habitsMonthStats, streakFreezes]);
 
   const handleSignOut = async () => {
     if (isSupabaseConfigured) {
@@ -458,67 +534,47 @@ function DashboardContent() {
               </div>
             </div>
 
-            {/* DAILY HABITS LIST */}
-            <div className="bg-white rounded-2xl border border-zinc-200 shadow-sm overflow-hidden flex flex-col">
-              <div className="bg-[#b4d2f9] py-2 px-4 text-center border-b border-zinc-200 flex items-center justify-between">
-                <span className="w-4" />
-                <h3 className="text-xs font-black tracking-widest text-blue-900 uppercase">
-                  Daily Habits
-                </h3>
-                <button
-                  onClick={() => { setHabitToEdit(null); setIsFormOpen(true); }}
-                  className="text-blue-700 hover:text-blue-950 font-black text-sm px-1 cursor-pointer focus:outline-none"
-                  title="Forge New Habit"
-                >
-                  +
-                </button>
+            {/* Coach Feedback & AI Insights Card */}
+            <div className="bg-white p-5 rounded-2xl border border-zinc-200 shadow-sm flex flex-col gap-4">
+              <div className="flex items-center gap-2">
+                <div className="p-1.5 rounded-lg bg-[#ccfbf1] text-teal-600 border border-[#99f6e4]/30">
+                  <Trophy size={14} className="text-teal-600" />
+                </div>
+                <span className="text-xs font-black tracking-wider text-teal-800 uppercase">
+                  Habit Coach Insights
+                </span>
               </div>
 
-              <div className="flex flex-col">
-                {Array.from({ length: 30 }).map((_, index) => {
-                  const habit = activeHabits[index];
-                  const isDimmed = zenMode && hoveredRowIndex !== null && hoveredRowIndex !== index;
-                  const currentStreak = habit ? calculateStreak(history, habit) : 0;
-                  const hasHotStreak = currentStreak >= 7;
+              <div className="flex flex-col gap-3">
+                {/* 1. Appreciation Block */}
+                <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-3.5 flex flex-col gap-1.5">
+                  <div className="flex items-center gap-1.5 text-emerald-700 font-bold text-[10px] uppercase tracking-wider">
+                    <Flame size={12} className="fill-current text-emerald-500" /> Appreciation
+                  </div>
+                  <p className="text-[10px] text-emerald-900 leading-normal font-semibold font-sans">
+                    {coachInsights.appreciation}
+                  </p>
+                </div>
 
-                  return (
-                    <div 
-                      key={index} 
-                      onMouseEnter={() => setHoveredRowIndex(index)}
-                      onMouseLeave={() => setHoveredRowIndex(null)}
-                      className={`flex items-center border-b border-zinc-100 h-[36px] px-3 text-xs font-medium transition-all group ${isDimmed ? 'opacity-25' : 'opacity-100'}`}
-                    >
-                      <span className="w-5 text-zinc-400 text-[10px] font-bold font-mono">{index + 1}</span>
-                      <input
-                        type="text"
-                        value={habit ? habit.name : ''}
-                        placeholder={index === activeCount ? "+ Add new habit..." : ""}
-                        onChange={(e) => handleNameChange(index, e.target.value)}
-                        onBlur={() => handleNameBlur(index)}
-                        className="flex-1 bg-transparent border-none text-slate-800 placeholder-zinc-400 font-semibold focus:outline-none focus:bg-zinc-50/80 rounded px-1.5 py-0.5 truncate text-[11px]"
-                      />
+                {/* 2. Improvement Block */}
+                <div className="bg-blue-50 border border-blue-100 rounded-xl p-3.5 flex flex-col gap-1.5">
+                  <div className="flex items-center gap-1.5 text-blue-700 font-bold text-[10px] uppercase tracking-wider">
+                    <Sliders size={12} className="text-blue-500" /> Improvement
+                  </div>
+                  <p className="text-[10px] text-blue-900 leading-normal font-semibold font-sans">
+                    {coachInsights.improvement}
+                  </p>
+                </div>
 
-                      {habit && (
-                        <div className="flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                          {hasHotStreak && (
-                            <div className="flex items-center text-amber-500 gap-0.5" title={`${currentStreak} day streak!`}>
-                              <Flame size={12} className="fill-current text-amber-500" />
-                              <span className="text-[9px] font-black font-mono">{currentStreak}</span>
-                            </div>
-                          )}
-                          <button
-                            type="button"
-                            onClick={() => { setHabitToEdit(habit); setIsFormOpen(true); }}
-                            className="p-1 text-zinc-400 hover:text-zinc-800 hover:bg-zinc-100 rounded transition-colors cursor-pointer"
-                            title="Edit details"
-                          >
-                            <Settings size={11} />
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
+                {/* 3. Blunder Block */}
+                <div className="bg-rose-50 border border-rose-100 rounded-xl p-3.5 flex flex-col gap-1.5">
+                  <div className="flex items-center gap-1.5 text-rose-700 font-bold text-[10px] uppercase tracking-wider">
+                    <Skull size={12} className="text-rose-500" /> Blunder Warning
+                  </div>
+                  <p className="text-[10px] text-rose-950 leading-normal font-semibold font-sans">
+                    {coachInsights.blunder}
+                  </p>
+                </div>
               </div>
             </div>
 
@@ -528,7 +584,7 @@ function DashboardContent() {
           <div className="md:col-span-6 flex flex-col gap-5">
             <CustomAreaChart />
             <WeeklyStats />
-            <GridSheet />
+            <GridSheet onEditHabit={(habit) => { setHabitToEdit(habit); setIsFormOpen(true); }} />
             <AchievementWidget />
           </div>
 
