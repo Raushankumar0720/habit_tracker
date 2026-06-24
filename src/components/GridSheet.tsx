@@ -1,8 +1,8 @@
 import React, { useMemo, useState } from 'react';
 import { useHabits } from '../context/HabitContext';
-import { Check, Snowflake, Shield, Skull, X } from 'lucide-react';
-import { isHabitCompletedOnDate } from '../utils/analytics';
-import type { Habit } from '../types';
+import { Check, Snowflake, Shield, Skull, X, Flame, Settings } from 'lucide-react';
+import { isHabitCompletedOnDate, calculateStreak } from '../utils/analytics';
+import type { Habit, HabitCategory } from '../types';
 
 const WEEK_STYLES = {
   1: { headerBg: 'bg-[#b4d2f9]', text: 'text-blue-800', border: 'border-[#93c5fd]', activeBorder: 'border-blue-400', checkBg: 'bg-blue-500', hoverBg: 'hover:bg-blue-50', barBg: 'bg-blue-500/20' },
@@ -22,7 +22,11 @@ const isDateScheduled = (habit: Habit, dateStr: string) => {
   return true;
 };
 
-export const GridSheet: React.FC = () => {
+interface GridSheetProps {
+  onEditHabit: (habit: Habit) => void;
+}
+
+export const GridSheet: React.FC<GridSheetProps> = ({ onEditHabit }) => {
   const {
     activeHabits,
     history,
@@ -36,7 +40,40 @@ export const GridSheet: React.FC = () => {
     setHoveredRowIndex,
     streakFreezes,
     useStreakFreeze,
+    addHabit,
+    deleteHabit,
+    updateHabitName,
   } = useHabits();
+
+  const handleNameChange = (index: number, newName: string) => {
+    const habit = activeHabits[index];
+    if (habit) {
+      updateHabitName(habit.id, newName);
+    } else if (newName.trim()) {
+      const categories: HabitCategory[] = ['health', 'work', 'mind', 'finance'];
+      const cat = categories[index % categories.length];
+      const icons = ['Dumbbell', 'Code', 'Brain', 'Wallet'];
+      const icon = icons[index % icons.length];
+      
+      addHabit(
+        newName,
+        `My habit routine number ${index + 1}`,
+        cat,
+        'daily',
+        'positive',
+        'binary',
+        icon,
+        80
+      );
+    }
+  };
+
+  const handleNameBlur = (index: number) => {
+    const habit = activeHabits[index];
+    if (habit && !habit.name.trim()) {
+      deleteHabit(habit.id);
+    }
+  };
 
   const [editingNumericCell, setEditingNumericCell] = useState<{
     habitId: string;
@@ -143,6 +180,12 @@ export const GridSheet: React.FC = () => {
         <table className="w-full border-collapse">
           <thead>
             <tr>
+              <th
+                rowSpan={3}
+                className="sticky left-0 bg-[#f8fafc] z-20 text-left text-[10px] font-black pb-2 text-slate-600 uppercase tracking-widest pl-4 w-[200px] min-w-[200px] border-r border-b-2 border-slate-200"
+              >
+                Habit / Routine
+              </th>
               {weekSpans.map((span) => (
                 <th
                   key={span.week}
@@ -204,14 +247,52 @@ export const GridSheet: React.FC = () => {
             {Array.from({ length: 30 }).map((_, rowIndex) => {
               const habit = activeHabits[rowIndex];
               const isDimmed = zenMode && hoveredRowIndex !== null && hoveredRowIndex !== rowIndex;
+              const currentStreak = habit ? calculateStreak(history, habit) : 0;
+              const hasHotStreak = currentStreak >= 7;
 
               return (
                 <tr 
                   key={rowIndex} 
                   onMouseEnter={() => setHoveredRowIndex(rowIndex)}
                   onMouseLeave={() => setHoveredRowIndex(null)}
-                  className={`hover:bg-zinc-50/50 transition-all h-[36px] ${isDimmed ? 'opacity-25' : 'opacity-100'}`}
+                  className={`hover:bg-zinc-50/50 transition-all h-[36px] group ${isDimmed ? 'opacity-25' : 'opacity-100'}`}
                 >
+                  {/* Sticky Habit Name Column */}
+                  <td 
+                    className="sticky left-0 bg-white group-hover:bg-zinc-50 transition-colors z-10 border-b border-zinc-100 pr-3 pl-4 min-w-[200px] max-w-[200px] border-r border-zinc-200"
+                  >
+                    <div className="flex items-center gap-2 h-[30px] w-full">
+                      <span className="text-zinc-400 text-[9px] font-bold font-mono w-4 shrink-0">
+                        {rowIndex + 1}
+                      </span>
+                      <input
+                        type="text"
+                        value={habit ? habit.name : ''}
+                        placeholder={rowIndex === activeHabits.length ? "+ Add new habit..." : ""}
+                        onChange={(e) => handleNameChange(rowIndex, e.target.value)}
+                        onBlur={() => handleNameBlur(rowIndex)}
+                        className="flex-1 bg-transparent border-none text-slate-800 placeholder-zinc-400 font-semibold focus:outline-none focus:bg-zinc-50/80 rounded px-1 text-[11px] truncate"
+                      />
+                      {habit && (
+                        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                          {hasHotStreak && (
+                            <div className="flex items-center text-amber-500 gap-0.5" title={`${currentStreak} day streak!`}>
+                              <Flame size={11} className="fill-current text-amber-500" />
+                              <span className="text-[8.5px] font-black font-mono">{currentStreak}</span>
+                            </div>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => onEditHabit(habit)}
+                            className="p-1 text-zinc-400 hover:text-zinc-800 hover:bg-zinc-100 rounded transition-colors cursor-pointer"
+                            title="Edit details"
+                          >
+                            <Settings size={10} />
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </td>
                   {days.map((day) => {
                     const style = WEEK_STYLES[day.weekNum as keyof typeof WEEK_STYLES] || WEEK_STYLES[5];
                     const val = habit ? history[day.dateStr]?.[habit.id] : undefined;
